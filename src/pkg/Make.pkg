@@ -1,2 +1,0 @@
-uninstall:
-	rm -f $(GOROOT)/pkg/$(GOOS)_$(GOARCH)/$(TARG).a

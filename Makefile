@@ -1,12 +1,11 @@
-CMDS=$(shell find src/cmd -mindepth 1 -maxdepth 1 -type d)
-PKGS=$(shell find src/pkg -mindepth 1 -maxdepth 1 -type d)
+include $(GOROOT)/src/Make.inc
 
-all: $(PKGS)
+TARG=goagain
+GOFILES=goagain.go
 
-example: $(CMDS)
+include $(GOROOT)/src/Make.pkg
 
-$(CMDS) $(PKGS)::
-	#make -C $@ install
-	make -C $@ uninstall clean install
+uninstall:
+	rm -f $(GOROOT)/pkg/$(GOOS)_$(GOARCH)/$(TARG).a
 
-.PHONY: all
+.PHONY: uninstall
