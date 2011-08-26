@@ -1,3 +1,4 @@
+// Zero-downtime restarts in Go.
 package goagain
 
 import (
