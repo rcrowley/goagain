@@ -14,4 +14,4 @@ Installation
 Usage
 -----
 
-[`example.go`](https://github.com/rcrowley/goagain/blob/master/cmd/example/example.go) shows how it's done.
+[`example.go`](https://github.com/rcrowley/goagain/blob/master/example/example.go) shows how it's done.
