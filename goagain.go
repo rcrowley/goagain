@@ -40,6 +40,12 @@ func AwaitSignals(l *net.TCPListener) os.Error {
 				err := Relaunch(l)
 				if nil != err { return err }
 
+			// SIGTSTP escalates to the unblockable SIGSTOP in order to
+			// provide familiar Ctrl+Z semantics in terminals.
+			case syscall.SIGTSTP:
+				errno := syscall.Kill(syscall.Getpid(), syscall.SIGSTOP)
+				if 0 != errno { return os.NewSyscallError("kill", errno) }
+
 			// Other signals exit immediately.
 			default:
 				os.Exit(128 + int(unixSig))
@@ -65,9 +71,9 @@ func GetEnvs() (*net.TCPListener, int, os.Error) {
 	if nil != err { return l, 0, err }
 	ppid, err := strconv.Atoi(envPpid)
 	if nil != err { return l, 0, err }
-	if os.Getppid() != ppid {
+	if syscall.Getppid() != ppid {
 		return l, ppid, os.NewError(fmt.Sprintf(
-			"GOAGAIN_PPID is %d but parent is %d\n", ppid, os.Getppid()))
+			"GOAGAIN_PPID is %d but parent is %d\n", ppid, syscall.Getppid()))
 	}
 	return l, ppid, nil
 }
@@ -90,7 +96,7 @@ func Relaunch(l *net.TCPListener) os.Error {
 	if nil != err { return err }
 	err = os.Setenv("GOAGAIN_FD", strconv.Itoa(f.Fd()))
 	if nil != err { return err }
-	err = os.Setenv("GOAGAIN_PPID", strconv.Itoa(os.Getpid()))
+	err = os.Setenv("GOAGAIN_PPID", strconv.Itoa(syscall.Getpid()))
 	if nil != err { return err }
 	p, err := os.StartProcess(argv0, os.Args, &os.ProcAttr{
 		Dir: wd,
