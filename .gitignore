@@ -2,4 +2,4 @@
 *.a
 *.swp
 _obj
-cmd/example/goagain-example
+example/goagain-example
