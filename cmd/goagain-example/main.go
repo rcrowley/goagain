@@ -1,7 +1,7 @@
 package main
 
 import (
-	"goagain"
+	"github.com/rcrowley/goagain"
 	"log"
 	"net"
 	"os"
@@ -18,13 +18,13 @@ func main() {
 		// Listen on a TCP socket and accept connections in a new goroutine.
 		laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:48879")
 		if nil != err {
-			log.Println(err.String())
+			log.Println(err)
 			os.Exit(1)
 		}
 		log.Printf("listening on %v", laddr)
 		l, err = net.ListenTCP("tcp", laddr)
 		if nil != err {
-			log.Println(err.String())
+			log.Println(err)
 			os.Exit(1)
 		}
 		go serve(l)
@@ -37,7 +37,7 @@ func main() {
 
 		// Kill the parent, now that the child has started successfully.
 		if err := goagain.KillParent(ppid); nil != err {
-			log.Println(err.String())
+			log.Println(err)
 			os.Exit(1)
 		}
 
@@ -45,7 +45,7 @@ func main() {
 
 	// Block the main goroutine awaiting signals.
 	if err := goagain.AwaitSignals(l); nil != err {
-		log.Println(err.String())
+		log.Println(err)
 		os.Exit(1)
 	}
 
