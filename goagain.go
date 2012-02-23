@@ -26,13 +26,13 @@ func AwaitSignals(l *net.TCPListener) error {
 
 		// TODO SIGHUP should reload configuration.
 
-			// SIGQUIT should exit gracefully.  However, Go doesn't seem
-			// to like handling SIGQUIT (or any signal which dumps core by
-			// default) at all so SIGTERM takes its place.  How graceful
-			// this exit is depends on what the program does after this
-			// function returns control.
-			case syscall.SIGTERM:
-				return nil
+		// SIGQUIT should exit gracefully.  However, Go doesn't seem
+		// to like handling SIGQUIT (or any signal which dumps core by
+		// default) at all so SIGTERM takes its place.  How graceful
+		// this exit is depends on what the program does after this
+		// function returns control.
+		case syscall.SIGTERM:
+			return nil
 
 		// TODO SIGUSR1 should reopen logs.
 
