@@ -58,7 +58,7 @@ func GetEnvs() (*net.TCPListener, int, error) {
 		return nil, 0, errors.New("GOAGAIN_FD not set")
 	}
 	var fd uintptr
-	_, err := fmt.Sscan(envFd, fd)
+	_, err := fmt.Sscan(envFd, &fd)
 	if nil != err {
 		return nil, 0, err
 	}
@@ -72,7 +72,7 @@ func GetEnvs() (*net.TCPListener, int, error) {
 		return l, 0, errors.New("GOAGAIN_PPID not set")
 	}
 	var ppid int
-	_, err = fmt.Sscan(envPpid, ppid)
+	_, err = fmt.Sscan(envPpid, &ppid)
 	if nil != err {
 		return l, 0, err
 	}
