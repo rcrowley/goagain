@@ -1,4 +1,4 @@
-Goagain
+goagain
 =======
 
 Zero-downtime restarts in Go
@@ -9,9 +9,9 @@ Inspired by [Unicorn](http://unicorn.bogomips.org/), the `goagain` package provi
 Installation
 ------------
 
-	goinstall github.com/rcrowley/goagain
+	go install github.com/rcrowley/goagain
 
 Usage
 -----
 
-[`example.go`](https://github.com/rcrowley/goagain/blob/master/example/example.go) shows how it's done.
+[`goagain-example.go`](https://github.com/rcrowley/goagain/blob/master/cmd/goagain-example/goagain-example.go) shows how it's done.
