@@ -17,13 +17,14 @@ import (
 // taking the place of SIGQUIT, signals are handled exactly as in Nginx
 // and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
 func AwaitSignals(l *net.TCPListener) error {
+	ch := make(chan os.Signal, 2)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
-		sig := <-signal.Incoming
+		sig := <-ch
 		log.Println(sig.String())
-		if unixSig, ok := sig.(os.UnixSignal); ok {
-			switch unixSig {
+		switch sig {
 
-			// TODO SIGHUP should reload configuration.
+		// TODO SIGHUP should reload configuration.
 
 			// SIGQUIT should exit gracefully.  However, Go doesn't seem
 			// to like handling SIGQUIT (or any signal which dumps core by
@@ -33,29 +34,16 @@ func AwaitSignals(l *net.TCPListener) error {
 			case syscall.SIGTERM:
 				return nil
 
-			// TODO SIGUSR1 should reopen logs.
+		// TODO SIGUSR1 should reopen logs.
 
-			// SIGUSR2 begins the process of restarting without dropping
-			// the listener passed to this function.
-			case syscall.SIGUSR2:
-				err := Relaunch(l)
-				if nil != err {
-					return err
-				}
-
-			// SIGTSTP escalates to the unblockable SIGSTOP in order to
-			// provide familiar Ctrl+Z semantics in terminals.
-			case syscall.SIGTSTP:
-				err := syscall.Kill(syscall.Getpid(), syscall.SIGSTOP)
-				if nil != err {
-					return err
-				}
-
-			// Other signals exit immediately.
-			default:
-				os.Exit(128 + int(unixSig))
-
+		// SIGUSR2 begins the process of restarting without dropping
+		// the listener passed to this function.
+		case syscall.SIGUSR2:
+			err := Relaunch(l)
+			if nil != err {
+				return err
 			}
+
 		}
 	}
 	return nil // It'll never get here.
@@ -65,11 +53,12 @@ func AwaitSignals(l *net.TCPListener) error {
 // variables.  If both are present and in order, this is a child process
 // that may pick up where the parent left off.
 func GetEnvs() (*net.TCPListener, int, error) {
-	envFd, err := os.Getenverror("GOAGAIN_FD")
-	if nil != err {
-		return nil, 0, err
+	envFd := os.Getenv("GOAGAIN_FD")
+	if "" == envFd {
+		return nil, 0, errors.New("GOAGAIN_FD not set")
 	}
-	fd, err := strconv.Atoi(envFd)
+	var fd uintptr
+	_, err := fmt.Sscan(envFd, fd)
 	if nil != err {
 		return nil, 0, err
 	}
@@ -78,11 +67,12 @@ func GetEnvs() (*net.TCPListener, int, error) {
 		return nil, 0, err
 	}
 	l := tmp.(*net.TCPListener)
-	envPpid, err := os.Getenverror("GOAGAIN_PPID")
-	if nil != err {
-		return l, 0, err
+	envPpid := os.Getenv("GOAGAIN_PPID")
+	if "" == envPpid {
+		return l, 0, errors.New("GOAGAIN_PPID not set")
 	}
-	ppid, err := strconv.Atoi(envPpid)
+	var ppid int
+	_, err = fmt.Sscan(envPpid, ppid)
 	if nil != err {
 		return l, 0, err
 	}
@@ -117,7 +107,7 @@ func Relaunch(l *net.TCPListener) error {
 	if nil != err {
 		return err
 	}
-	err = os.Setenv("GOAGAIN_FD", strconv.Itoa(f.Fd()))
+	err = os.Setenv("GOAGAIN_FD", fmt.Sprint(f.Fd()))
 	if nil != err {
 		return err
 	}
