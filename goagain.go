@@ -4,7 +4,6 @@ package goagain
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -21,7 +20,6 @@ func AwaitSignals(l *net.TCPListener) error {
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
 		sig := <-ch
-		log.Println(sig.String())
 		switch sig {
 
 		// TODO SIGHUP should reload configuration.
@@ -115,7 +113,7 @@ func Relaunch(l *net.TCPListener) error {
 	if nil != err {
 		return err
 	}
-	p, err := os.StartProcess(argv0, os.Args, &os.ProcAttr{
+	_, err = os.StartProcess(argv0, os.Args, &os.ProcAttr{
 		Dir:   wd,
 		Env:   os.Environ(),
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr, f},
@@ -124,6 +122,5 @@ func Relaunch(l *net.TCPListener) error {
 	if nil != err {
 		return err
 	}
-	log.Printf("spawned child %d\n", p.Pid)
 	return nil
 }
