@@ -1,59 +1,34 @@
 package main
 
 import (
-	"github.com/rcrowley/goagain"
+	"goagain"
 	"log"
-	"net"
-	"os"
+	"net/http"
+	"fmt"
+	"time"
+	"syscall"
 )
 
 func main() {
 
-	// Get the listener and ppid from the environment.  If this is successful,
-	// this process is a child that's inheriting and open listener from ppid.
-	l, ppid, err := goagain.GetEnvs()
-
-	if nil != err {
-
-		// Listen on a TCP socket and accept connections in a new goroutine.
-		laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:48879")
-		if nil != err {
-			log.Println(err)
-			os.Exit(1)
-		}
-		log.Printf("listening on %v", laddr)
-		l, err = net.ListenTCP("tcp", laddr)
-		if nil != err {
-			log.Println(err)
-			os.Exit(1)
-		}
-		go serve(l)
-
-	} else {
-
-		// Resume listening and accepting connections in a new goroutine.
-		log.Printf("resuming listening on %v", l.Addr())
-		go serve(l)
-
-		// Kill the parent, now that the child has started successfully.
-		if err := goagain.KillParent(ppid); nil != err {
-			log.Println(err)
-			os.Exit(1)
-		}
-
-	}
-
-	// Block the main goroutine awaiting signals.
-	if err := goagain.AwaitSignals(l); nil != err {
-		log.Println(err)
-		os.Exit(1)
-	}
-
-	// Do whatever's necessary to ensure a graceful exit like waiting for
-	// goroutines to terminate or a channel to become closed.
+        log.SetPrefix(fmt.Sprintf("[%5d] ", syscall.Getpid()))
+        http.HandleFunc("/hello", HelloServer)
+        http.HandleFunc("/slow", WaitFive)
+        http.HandleFunc("/superslow", WaitFifteen)
+        goagain.ListenAndServe("tcp", "127.0.0.1:48879")
 
 }
 
-func serve(l *net.TCPListener) {
-	log.Println("TODO l.Accept()")
+func HelloServer(w http.ResponseWriter, req *http.Request) {
+        fmt.Fprintf(w, "hello world\n")
+}
+
+func WaitFive(w http.ResponseWriter, req *http.Request) {
+        time.Sleep(5 * time.Second)
+        fmt.Fprintf(w, "sorry for being slow\n")
+}
+
+func WaitFifteen(w http.ResponseWriter, req *http.Request) {
+        time.Sleep(15 * time.Second)
+        fmt.Fprintf(w, "sorry for being slow\n")
 }

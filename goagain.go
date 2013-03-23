@@ -11,7 +11,54 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+        "runtime"
+        "time"
+        "sync"
+        "net/http"
 )
+
+type ReqCounter struct {
+        m sync.Mutex
+        c int
+}
+
+func (c ReqCounter)get() (ct int) {
+        c.m.Lock()
+        ct = c.c
+        c.m.Unlock()
+        return
+}
+
+var reqCount ReqCounter
+
+type SupervisedConn struct {
+        net.Conn
+}
+
+func (w SupervisedConn) Close() error {
+        log.Printf("close on conn to %v", w.RemoteAddr())
+        reqCount.m.Lock()
+        reqCount.c--
+        reqCount.m.Unlock()
+        return w.Conn.Close()
+}
+
+type SupervisingListener struct {
+        net.Listener
+}
+
+func (sl *SupervisingListener) Accept() (c net.Conn, err error) {
+        c, err = sl.Listener.Accept()
+        if err != nil {
+                return
+        }
+        c = SupervisedConn{Conn: c}
+        log.Printf("open on conn to %v", c.RemoteAddr())
+        reqCount.m.Lock()
+        reqCount.c++
+        reqCount.m.Unlock()
+        return
+}
 
 // Block this goroutine awaiting signals.  With the exception of SIGTERM
 // taking the place of SIGQUIT, signals are handled exactly as in Nginx
@@ -39,10 +86,27 @@ func AwaitSignals(l *net.TCPListener) error {
 		// SIGUSR2 begins the process of restarting without dropping
 		// the listener passed to this function.
 		case syscall.SIGUSR2:
+                       log.Print("Got relaunch signal.")
+
 			err := Relaunch(l)
 			if nil != err {
 				return err
 			}
+                       log.Print("Child launched")
+                       l.Close()
+                       log.Printf("Server no longer accepting requests.  Outstanding requests: %d", reqCount.get())
+
+                        for i := 0; (i < 10) && reqCount.get() > 0 ; i++ {
+                                log.Printf("waiting for %d ongoing requests...", reqCount.get())
+                                time.Sleep(1 * time.Second)
+                        }
+
+                        if reqCount.get() == 0 {
+                                log.Print("server gracefully stopped.")
+                                os.Exit(0)
+                        } else {
+                                log.Fatalf("server stopped after 10 seconds with %d clients still connected.", reqCount.get())
+                        }
 
 		}
 	}
@@ -52,45 +116,22 @@ func AwaitSignals(l *net.TCPListener) error {
 // Convert and validate the GOAGAIN_FD and GOAGAIN_PPID environment
 // variables.  If both are present and in order, this is a child process
 // that may pick up where the parent left off.
-func GetEnvs() (*net.TCPListener, int, error) {
+func GetEnvs() (*net.TCPListener, error) {
 	envFd := os.Getenv("GOAGAIN_FD")
 	if "" == envFd {
-		return nil, 0, errors.New("GOAGAIN_FD not set")
+		return nil, errors.New("GOAGAIN_FD not set")
 	}
 	var fd uintptr
 	_, err := fmt.Sscan(envFd, &fd)
 	if nil != err {
-		return nil, 0, err
+		return nil, err
 	}
 	tmp, err := net.FileListener(os.NewFile(fd, "listener"))
 	if nil != err {
-		return nil, 0, err
+		return nil, err
 	}
 	l := tmp.(*net.TCPListener)
-	envPpid := os.Getenv("GOAGAIN_PPID")
-	if "" == envPpid {
-		return l, 0, errors.New("GOAGAIN_PPID not set")
-	}
-	var ppid int
-	_, err = fmt.Sscan(envPpid, &ppid)
-	if nil != err {
-		return l, 0, err
-	}
-	if syscall.Getppid() != ppid {
-		return l, ppid, errors.New(fmt.Sprintf(
-			"GOAGAIN_PPID is %d but parent is %d\n", ppid, syscall.Getppid()))
-	}
-	return l, ppid, nil
-}
-
-// Send SIGQUIT (but really SIGTERM since Go can't handle SIGQUIT) to the
-// given ppid in order to complete the handoff to the child process.
-func KillParent(ppid int) error {
-	err := syscall.Kill(ppid, syscall.SIGTERM)
-	if nil != err {
-		return err
-	}
-	return nil
+	return l, nil
 }
 
 // Re-exec this image without dropping the listener passed to this function.
@@ -99,6 +140,7 @@ func Relaunch(l *net.TCPListener) error {
 	if nil != err {
 		return err
 	}
+	noCloseOnExec(f.Fd())
 	argv0, err := exec.LookPath(os.Args[0])
 	if nil != err {
 		return err
@@ -126,4 +168,66 @@ func Relaunch(l *net.TCPListener) error {
 	}
 	log.Printf("spawned child %d\n", p.Pid)
 	return nil
+}
+
+// Taken from upgradable.go
+
+// These are here because there is no API in syscall for turning OFF
+// close-on-exec (yet).
+
+// from syscall/zsyscall_linux_386.go, but it seems like it might work
+// for other platforms too.
+func fcntl(fd int, cmd int, arg int) (val int, err error) {
+        if runtime.GOOS != "linux" {
+                log.Fatal("Function fcntl has not been tested on other platforms than linux.")
+        }
+
+        r0, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), uintptr(cmd), uintptr(arg))
+        val = int(r0)
+        if e1 != 0 {
+                err = e1
+        }
+        return
+}
+
+func noCloseOnExec(fd uintptr) {
+        fcntl(int(fd), syscall.F_SETFD, ^syscall.FD_CLOEXEC)
+}
+
+func ListenAndServe(proto string, addr string) {
+    // FIXME: support UNIX sockets (proto unix)
+        l, err := GetEnvs()
+
+        if nil != err {
+
+                log.Printf("Opening socket for the first time because %s", err)
+                // Listen on a TCP socket and accept connections in a new goroutine.
+                laddr, err := net.ResolveTCPAddr(proto, addr)
+                if nil != err {
+                        log.Println(err)
+                        os.Exit(1)
+                }
+                log.Printf("listening on %v", laddr)
+                l, err = net.ListenTCP(proto, laddr)
+                if nil != err {
+                        log.Println(err)
+                        os.Exit(1)
+                }
+                m := &SupervisingListener{Listener: l}
+                go http.Serve(m, nil)
+
+        } else {
+
+                // Resume listening and accepting connections in a new goroutine.
+                log.Printf("resuming listening on %v", l.Addr())
+                m := &SupervisingListener{Listener: l}
+                go http.Serve(m, nil)
+
+        }
+
+        // Block the main goroutine awaiting signals.
+        if err := AwaitSignals(l); nil != err {
+                log.Println(err)
+                os.Exit(1)
+        }
 }
