@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"strconv"
 	"syscall"
         "runtime"
         "time"
@@ -63,7 +62,7 @@ func (sl *SupervisingListener) Accept() (c net.Conn, err error) {
 // Block this goroutine awaiting signals.  With the exception of SIGTERM
 // taking the place of SIGQUIT, signals are handled exactly as in Nginx
 // and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
-func AwaitSignals(l *net.TCPListener) error {
+func AwaitSignals(l *net.UnixListener) error {
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
@@ -93,7 +92,14 @@ func AwaitSignals(l *net.TCPListener) error {
 				return err
 			}
                        log.Print("Child launched")
-                       l.Close()
+                       f, err := l.File()
+                       if nil != err {
+                               return err
+                       }
+                       err = fclose(int(f.Fd()))
+                       if nil != err {
+                               return err
+                       }
                        log.Printf("Server no longer accepting requests.  Outstanding requests: %d", reqCount.get())
 
                         for i := 0; (i < 10) && reqCount.get() > 0 ; i++ {
@@ -116,7 +122,7 @@ func AwaitSignals(l *net.TCPListener) error {
 // Convert and validate the GOAGAIN_FD environment
 // variable.  If both are present and in order, this is a child process
 // that may pick up where the parent left off.
-func GetEnvs() (*net.TCPListener, error) {
+func GetEnvs() (*net.UnixListener, error) {
 	envFd := os.Getenv("GOAGAIN_FD")
 	if "" == envFd {
 		return nil, errors.New("GOAGAIN_FD not set")
@@ -130,12 +136,12 @@ func GetEnvs() (*net.TCPListener, error) {
 	if nil != err {
 		return nil, err
 	}
-	l := tmp.(*net.TCPListener)
+	l := tmp.(*net.UnixListener)
 	return l, nil
 }
 
 // Re-exec this image without dropping the listener passed to this function.
-func Relaunch(l *net.TCPListener) error {
+func Relaunch(l *net.UnixListener) error {
 	f, err := l.File()
 	if nil != err {
 		return err
@@ -190,6 +196,15 @@ func noCloseOnExec(fd uintptr) {
         fcntl(int(fd), syscall.F_SETFD, ^syscall.FD_CLOEXEC)
 }
 
+func fclose(fd int) (err error) {
+        if runtime.GOOS != "linux" {
+                log.Fatal("Function fclose has not been tested on other platforms than linux.")
+        }
+
+        err = syscall.Close(fd)
+        return
+}
+
 func ListenAndServe(proto string, addr string) {
     // FIXME: support UNIX sockets (proto unix)
         l, err := GetEnvs()
@@ -198,13 +213,13 @@ func ListenAndServe(proto string, addr string) {
 
                 log.Printf("Opening socket for the first time because %s", err)
                 // Listen on a TCP socket and accept connections in a new goroutine.
-                laddr, err := net.ResolveTCPAddr(proto, addr)
+                laddr, err := net.ResolveUnixAddr(proto, addr)
                 if nil != err {
                         log.Println(err)
                         os.Exit(1)
                 }
                 log.Printf("listening on %v", laddr)
-                l, err = net.ListenTCP(proto, laddr)
+                l, err = net.ListenUnix(proto, laddr)
                 if nil != err {
                         log.Println(err)
                         os.Exit(1)
