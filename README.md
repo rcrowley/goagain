@@ -28,3 +28,5 @@ To connect you will need `socat` installed on your system:
         echo "GET /slow HTTP/1.0
         
         " | socat -t20 - UNIX-CONNECT:/tmp/goagain-example.sock
+
+We've included a command line client in [`client/sget`](client/sget) that helps you perform HTTP requests against a UNIX socket.

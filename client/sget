@@ -1,0 +1,11 @@
+#!/bin/bash -e
+
+if [ -z "$2" ] ; then
+    echo "$0: simple wget emulator for UNIX sockets" >> /dev/stderr
+    echo usage: "$0 <path-to-socket> <URL>" >> /dev/stderr
+    exit 64
+fi
+
+echo "GET $2 HTTP/1.0
+
+" | socat -t20 - UNIX-CONNECT:"$1"
