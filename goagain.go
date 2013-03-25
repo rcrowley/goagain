@@ -14,6 +14,7 @@ import (
         "time"
         "sync"
         "net/http"
+        "flag"
 )
 
 type ReqCounter struct {
@@ -239,4 +240,11 @@ func ListenAndServe(proto string, addr string) {
                 log.Println(err)
                 os.Exit(1)
         }
+}
+
+func Run() {
+        var socketvar string
+        flag.StringVar(&socketvar, "socket", "/tmp/socket", "path to UNIX socket to listen on")
+        flag.Parse()
+        ListenAndServe("unix", socketvar)
 }

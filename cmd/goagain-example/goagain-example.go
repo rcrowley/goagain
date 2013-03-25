@@ -12,7 +12,7 @@ func main() {
         http.HandleFunc("/hello", HelloServer)
         http.HandleFunc("/slow", WaitFive)
         http.HandleFunc("/superslow", WaitFifteen)
-        goagain.ListenAndServe("unix", "/tmp/goagain-example.sock")
+        goagain.Run()
 
 }
 
