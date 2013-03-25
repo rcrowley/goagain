@@ -2,16 +2,13 @@ package main
 
 import (
 	"goagain"
-	"log"
 	"net/http"
 	"fmt"
 	"time"
-	"syscall"
 )
 
 func main() {
 
-        log.SetPrefix(fmt.Sprintf("[%5d] ", syscall.Getpid()))
         http.HandleFunc("/hello", HelloServer)
         http.HandleFunc("/slow", WaitFive)
         http.HandleFunc("/superslow", WaitFifteen)

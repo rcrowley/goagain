@@ -35,7 +35,6 @@ type SupervisedConn struct {
 }
 
 func (w SupervisedConn) Close() error {
-        log.Printf("close on conn to %v", w.RemoteAddr())
         reqCount.m.Lock()
         reqCount.c--
         reqCount.m.Unlock()
@@ -52,7 +51,6 @@ func (sl *SupervisingListener) Accept() (c net.Conn, err error) {
                 return
         }
         c = SupervisedConn{Conn: c}
-        log.Printf("open on conn to %v", c.RemoteAddr())
         reqCount.m.Lock()
         reqCount.c++
         reqCount.m.Unlock()
@@ -85,13 +83,13 @@ func AwaitSignals(l *net.UnixListener) error {
 		// SIGUSR2 begins the process of restarting without dropping
 		// the listener passed to this function.
 		case syscall.SIGUSR2:
-                       log.Print("Got relaunch signal.")
+                       log.Print("got SIGUSR2 relaunch signal.")
 
 			err := Relaunch(l)
 			if nil != err {
 				return err
 			}
-                       log.Print("Child launched")
+                       log.Print("child launched")
                        f, err := l.File()
                        if nil != err {
                                return err
@@ -100,10 +98,10 @@ func AwaitSignals(l *net.UnixListener) error {
                        if nil != err {
                                return err
                        }
-                       log.Printf("Server no longer accepting requests.  Outstanding requests: %d", reqCount.get())
+                       log.Printf("server no longer accepting requests -- outstanding requests: %d", reqCount.get())
 
                         for i := 0; (i < 10) && reqCount.get() > 0 ; i++ {
-                                log.Printf("waiting for %d ongoing requests...", reqCount.get())
+                                log.Printf("waiting for %d outstanding requests...", reqCount.get())
                                 time.Sleep(1 * time.Second)
                         }
 
@@ -206,12 +204,12 @@ func fclose(fd int) (err error) {
 }
 
 func ListenAndServe(proto string, addr string) {
-    // FIXME: support UNIX sockets (proto unix)
+        log.SetPrefix(fmt.Sprintf("[%s:%5d] ", os.Args[0], syscall.Getpid()))
         l, err := GetEnvs()
 
         if nil != err {
 
-                log.Printf("Opening socket for the first time because %s", err)
+                log.Printf("opening socket for the first time because %s", err)
                 // Listen on a TCP socket and accept connections in a new goroutine.
                 laddr, err := net.ResolveUnixAddr(proto, addr)
                 if nil != err {
