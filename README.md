@@ -16,14 +16,14 @@ Installation
         git clone https://github.com/Rudd-O/goagain
         cd goagain
         export GOPATH=...
-        go build ; go install ; cd cmd/* ; go build *.go ; go install ; cd ../..
+        go install goagain goagain-example
 
 Usage
 -----
 
-[`goagain-example.go`](https://github.com/Rudd-O/goagain/blob/master/cmd/goagain-example/goagain-example.go) shows how it's done.  After building it, run it as:
+[`goagain-example.go`](https://github.com/Rudd-O/goagain/blob/master/src/goagain-example/main.go) shows how it's done.  After building it, run it as:
 
-        path/to/goagain-example -socket=/tmp/goagain-example.sock
+        bin/goagain-example -socket=/tmp/goagain-example.sock
 
 To connect you will need `socat` installed on your system:
 
