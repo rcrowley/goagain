@@ -113,8 +113,8 @@ func AwaitSignals(l *net.TCPListener) error {
 	return nil // It'll never get here.
 }
 
-// Convert and validate the GOAGAIN_FD and GOAGAIN_PPID environment
-// variables.  If both are present and in order, this is a child process
+// Convert and validate the GOAGAIN_FD environment
+// variable.  If both are present and in order, this is a child process
 // that may pick up where the parent left off.
 func GetEnvs() (*net.TCPListener, error) {
 	envFd := os.Getenv("GOAGAIN_FD")
@@ -150,10 +150,6 @@ func Relaunch(l *net.TCPListener) error {
 		return err
 	}
 	err = os.Setenv("GOAGAIN_FD", fmt.Sprint(f.Fd()))
-	if nil != err {
-		return err
-	}
-	err = os.Setenv("GOAGAIN_PPID", strconv.Itoa(syscall.Getpid()))
 	if nil != err {
 		return err
 	}
