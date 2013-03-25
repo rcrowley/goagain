@@ -21,7 +21,9 @@ Installation
 Usage
 -----
 
-[`goagain-example.go`](https://github.com/Rudd-O/goagain/blob/master/cmd/goagain-example/goagain-example.go) shows how it's done.
+[`goagain-example.go`](https://github.com/Rudd-O/goagain/blob/master/cmd/goagain-example/goagain-example.go) shows how it's done.  After building it, run it as:
+
+        path/to/goagain-example -socket=/tmp/goagain-example.sock
 
 To connect you will need `socat` installed on your system:
 
