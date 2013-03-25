@@ -13,15 +13,12 @@ This is a derivative program from rcrowley's `https://github.com/rcrowley/goagai
 Installation
 ------------
 
-        git clone https://github.com/Rudd-O/goagain
-        cd goagain
-        export GOPATH=...
-        go install goagain goagain-example
+        go get https://github.com/Rudd-O/goagain
 
 Usage
 -----
 
-[`goagain-example.go`](https://github.com/Rudd-O/goagain/blob/master/src/goagain-example/main.go) shows how it's done.  After building it, run it as:
+[`goagain-example.go`](https://github.com/Rudd-O/goagain/blob/master/goagain-example/main.go) shows how it's done.  After building it, run it as:
 
         bin/goagain-example -socket=/tmp/goagain-example.sock
 
