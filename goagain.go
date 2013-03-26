@@ -113,7 +113,7 @@ func Relaunch(l *net.TCPListener) error {
 	if err := os.Setenv("GOAGAIN_PPID", fmt.Sprint(syscall.Getpid())); nil != err {
 		return err
 	}
-	files := make([]*os.File, fd + 1)
+	files := make([]*os.File, fd+1)
 	files[syscall.Stdin] = os.Stdin
 	files[syscall.Stdout] = os.Stdout
 	files[syscall.Stderr] = os.Stderr
