@@ -16,7 +16,7 @@ import (
 // Block this goroutine awaiting signals.  With the exception of SIGTERM
 // taking the place of SIGQUIT, signals are handled exactly as in Nginx
 // and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
-func AwaitSignals(l *net.TCPListener) error {
+func AwaitSignals(l net.Listener) error {
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
@@ -52,7 +52,7 @@ func AwaitSignals(l *net.TCPListener) error {
 // Convert and validate the GOAGAIN_FD, GOAGAIN_NAME, and GOAGAIN_PPID
 // environment variables.  If all three are present and in order, this
 // is a child process that may pick up where the parent left off.
-func GetEnvs() (l *net.TCPListener, ppid int, err error) {
+func GetEnvs() (l net.Listener, ppid int, err error) {
 	var fd uintptr
 	_, err = fmt.Sscan(os.Getenv("GOAGAIN_FD"), &fd)
 	if nil != err {
@@ -93,7 +93,7 @@ func KillParent(ppid int) error {
 }
 
 // Re-exec this image without dropping the listener passed to this function.
-func Relaunch(l *net.TCPListener) error {
+func Relaunch(l net.Listener) error {
 	argv0, err := exec.LookPath(os.Args[0])
 	if nil != err {
 		return err

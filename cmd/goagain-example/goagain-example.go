@@ -8,10 +8,15 @@ import (
 )
 
 func main() {
+	var (
+		err error
+		l net.Listener
+		ppid int
+	)
 
 	// Get the listener and ppid from the environment.  If this is successful,
 	// this process is a child that's inheriting and open listener from ppid.
-	l, ppid, err := goagain.GetEnvs()
+	l, ppid, err = goagain.GetEnvs()
 
 	if nil != err {
 
@@ -54,6 +59,6 @@ func main() {
 
 }
 
-func serve(l *net.TCPListener) {
+func serve(l net.Listener) {
 	log.Println("TODO l.Accept()")
 }
