@@ -62,7 +62,7 @@ func GetEnvs() (*net.TCPListener, int, error) {
 	if nil != err {
 		return nil, 0, err
 	}
-	tmp, err := net.FileListener(os.NewFile(fd, "listener"))
+	tmp, err := net.FileListener(os.NewFile(fd, os.Getenv("GOAGAIN_NAME")))
 	if nil != err {
 		return nil, 0, err
 	}
@@ -106,6 +106,9 @@ func Relaunch(l *net.TCPListener) error {
 	v := reflect.ValueOf(l).Elem().FieldByName("fd").Elem()
 	fd := uintptr(v.FieldByName("sysfd").Int())
 	if err := os.Setenv("GOAGAIN_FD", fmt.Sprint(fd)); nil != err {
+		return err
+	}
+	if err := os.Setenv("GOAGAIN_NAME", fmt.Sprintf("tcp:%s->", l.Addr().String())); nil != err {
 		return err
 	}
 	if err := os.Setenv("GOAGAIN_PPID", fmt.Sprint(syscall.Getpid())); nil != err {
