@@ -62,5 +62,15 @@ func main() {
 }
 
 func serve(l *net.TCPListener) {
-	log.Println("TODO l.Accept()")
+	for {
+		conn, err := l.AcceptTCP()
+
+		if nil != err {
+			log.Println(err)
+			os.Exit(1)
+		}
+
+		conn.Write([]byte("Hello, World\n"))
+		conn.CloseWrite()
+	}
 }
