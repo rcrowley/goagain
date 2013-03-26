@@ -52,6 +52,12 @@ func main() {
 	// Do whatever's necessary to ensure a graceful exit like waiting for
 	// goroutines to terminate or a channel to become closed.
 
+	// In this case, we'll simply stop listening and wait one second.
+	if err := l.Close(); nil != err {
+		log.Fatalln(err)
+	}
+	time.Sleep(1e9)
+
 }
 
 func serve(l *net.TCPListener) {
