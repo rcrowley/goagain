@@ -113,15 +113,15 @@ func Relaunch(l *net.TCPListener) error {
 	if err := os.Setenv("GOAGAIN_PPID", fmt.Sprint(syscall.Getpid())); nil != err {
 		return err
 	}
+	files := make([]*os.File, fd + 1)
+	files[syscall.Stdin] = os.Stdin
+	files[syscall.Stdout] = os.Stdout
+	files[syscall.Stderr] = os.Stderr
+	files[fd] = os.NewFile(fd, string(v.FieldByName("sysfile").String()))
 	p, err := os.StartProcess(argv0, os.Args, &os.ProcAttr{
 		Dir:   wd,
 		Env:   os.Environ(),
-		Files: []*os.File{
-			os.Stdin,
-			os.Stdout,
-			os.Stderr,
-			os.NewFile(fd, string(v.FieldByName("sysfile").String())),
-		},
+		Files: files,
 		Sys:   &syscall.SysProcAttr{},
 	})
 	if nil != err {
