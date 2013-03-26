@@ -52,35 +52,44 @@ func AwaitSignals(l *net.TCPListener) error {
 // Convert and validate the GOAGAIN_FD and GOAGAIN_PPID environment
 // variables.  If both are present and in order, this is a child process
 // that may pick up where the parent left off.
-func GetEnvs() (*net.TCPListener, int, error) {
+func GetEnvs() (l *net.TCPListener, ppid int, err error) {
 	envFd := os.Getenv("GOAGAIN_FD")
 	if "" == envFd {
-		return nil, 0, errors.New("GOAGAIN_FD not set")
+		err = errors.New("GOAGAIN_FD not set")
+		return
 	}
 	var fd uintptr
-	_, err := fmt.Sscan(envFd, &fd)
+	_, err = fmt.Sscan(envFd, &fd)
 	if nil != err {
-		return nil, 0, err
+		return
 	}
-	tmp, err := net.FileListener(os.NewFile(fd, os.Getenv("GOAGAIN_NAME")))
+	var i net.Listener
+	i, err = net.FileListener(os.NewFile(fd, os.Getenv("GOAGAIN_NAME")))
 	if nil != err {
-		return nil, 0, err
+		return
 	}
-	l := tmp.(*net.TCPListener)
+	l = i.(*net.TCPListener)
+	if err = syscall.Close(int(fd)); nil != err {
+		return
+	}
 	envPpid := os.Getenv("GOAGAIN_PPID")
 	if "" == envPpid {
-		return l, 0, errors.New("GOAGAIN_PPID not set")
+		err = errors.New("GOAGAIN_PPID not set")
+		return
 	}
-	var ppid int
 	_, err = fmt.Sscan(envPpid, &ppid)
 	if nil != err {
-		return l, 0, err
+		return
 	}
 	if syscall.Getppid() != ppid {
-		return l, ppid, errors.New(fmt.Sprintf(
-			"GOAGAIN_PPID is %d but parent is %d\n", ppid, syscall.Getppid()))
+		err = errors.New(fmt.Sprintf(
+			"GOAGAIN_PPID is %d but parent is %d\n",
+			ppid,
+			syscall.Getppid(),
+		))
+		return
 	}
-	return l, ppid, nil
+	return
 }
 
 // Send SIGQUIT (but really SIGTERM since Go can't handle SIGQUIT) to the
