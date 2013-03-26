@@ -20,7 +20,7 @@ func main() {
 
 	if nil != err {
 
-		// Listen on a TCP socket and accept connections in a new goroutine.
+		// Listen on a TCP or a UNIX domain socket (the latter is commented).
 		laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:48879")
 		if nil != err {
 			log.Println(err)
@@ -28,10 +28,21 @@ func main() {
 		}
 		log.Printf("listening on %v", laddr)
 		l, err = net.ListenTCP("tcp", laddr)
+		/*
+			laddr, err := net.ResolveUnixAddr("unix", "127.0.0.1:48879")
+			if nil != err {
+				log.Println(err)
+				os.Exit(1)
+			}
+			log.Printf("listening on %v", laddr)
+			l, err = net.ListenUnix("unix", laddr)
+		*/
 		if nil != err {
 			log.Println(err)
 			os.Exit(1)
 		}
+
+		// Accept connections in a new goroutine.
 		go serve(l)
 
 	} else {

@@ -63,7 +63,18 @@ func GetEnvs() (l net.Listener, ppid int, err error) {
 	if nil != err {
 		return
 	}
-	l = i.(*net.TCPListener)
+	switch i.(type) {
+	case *net.TCPListener:
+		l = i.(*net.TCPListener)
+	case *net.UnixListener:
+		l = i.(*net.UnixListener)
+	default:
+		err = errors.New(fmt.Sprintf(
+			"file descriptor is %T not *net.TCPListener or *net.UnixListener",
+			i,
+		))
+		return
+	}
 	if err = syscall.Close(int(fd)); nil != err {
 		return
 	}
@@ -73,7 +84,7 @@ func GetEnvs() (l net.Listener, ppid int, err error) {
 	}
 	if syscall.Getppid() != ppid {
 		err = errors.New(fmt.Sprintf(
-			"GOAGAIN_PPID is %d but parent is %d\n",
+			"GOAGAIN_PPID is %d but parent is %d",
 			ppid,
 			syscall.Getppid(),
 		))
