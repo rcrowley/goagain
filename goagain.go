@@ -13,6 +13,10 @@ import (
 	"syscall"
 )
 
+// Export an error equivalent to net.errClosing for use with Accept during
+// a graceful exit.
+var ErrClosing = errors.New("use of closed network connection")
+
 // Block this goroutine awaiting signals.  With the exception of SIGTERM
 // taking the place of SIGQUIT, signals are handled exactly as in Nginx
 // and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.

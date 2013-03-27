@@ -58,14 +58,15 @@ func main() {
 
 func serve(l *net.TCPListener) {
 	for {
-		conn, err := l.AcceptTCP()
-
+		c, err := l.AcceptTCP()
 		if nil != err {
-			log.Println(err)
-			os.Exit(1)
+			err = err.(*net.OpError).Err
+			if goagain.ErrClosing.Error() != err.Error() {
+				log.Fatalln(err)
+			}
+			break
 		}
-
-		conn.Write([]byte("Hello, World\n"))
-		conn.CloseWrite()
+		c.Write([]byte("Hello, world!\n"))
+		c.Close()
 	}
 }
