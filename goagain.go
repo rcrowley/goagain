@@ -20,7 +20,7 @@ var ErrClosing = errors.New("use of closed network connection")
 // Block this goroutine awaiting signals.  With the exception of SIGTERM
 // taking the place of SIGQUIT, signals are handled exactly as in Nginx
 // and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
-func AwaitSignals(l *net.TCPListener) error {
+func AwaitSignals(l net.Listener) error {
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
@@ -56,7 +56,7 @@ func AwaitSignals(l *net.TCPListener) error {
 // Convert and validate the GOAGAIN_FD, GOAGAIN_NAME, and GOAGAIN_PPID
 // environment variables.  If all three are present and in order, this
 // is a child process that may pick up where the parent left off.
-func GetEnvs() (l *net.TCPListener, ppid int, err error) {
+func GetEnvs() (l net.Listener, ppid int, err error) {
 	var fd uintptr
 	_, err = fmt.Sscan(os.Getenv("GOAGAIN_FD"), &fd)
 	if nil != err {
@@ -67,7 +67,18 @@ func GetEnvs() (l *net.TCPListener, ppid int, err error) {
 	if nil != err {
 		return
 	}
-	l = i.(*net.TCPListener)
+	switch i.(type) {
+	case *net.TCPListener:
+		l = i.(*net.TCPListener)
+	case *net.UnixListener:
+		l = i.(*net.UnixListener)
+	default:
+		err = errors.New(fmt.Sprintf(
+			"file descriptor is %T not *net.TCPListener or *net.UnixListener",
+			i,
+		))
+		return
+	}
 	if err = syscall.Close(int(fd)); nil != err {
 		return
 	}
@@ -77,7 +88,7 @@ func GetEnvs() (l *net.TCPListener, ppid int, err error) {
 	}
 	if syscall.Getppid() != ppid {
 		err = errors.New(fmt.Sprintf(
-			"GOAGAIN_PPID is %d but parent is %d\n",
+			"GOAGAIN_PPID is %d but parent is %d",
 			ppid,
 			syscall.Getppid(),
 		))
@@ -97,7 +108,7 @@ func KillParent(ppid int) error {
 }
 
 // Re-exec this image without dropping the listener passed to this function.
-func Relaunch(l *net.TCPListener) error {
+func Relaunch(l net.Listener) error {
 	argv0, err := exec.LookPath(os.Args[0])
 	if nil != err {
 		return err

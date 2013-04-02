@@ -8,23 +8,39 @@ import (
 )
 
 func main() {
+	var (
+		err error
+		l net.Listener
+		ppid int
+	)
 
 	// Get the listener and ppid from the environment.  If this is successful,
 	// this process is a child that's inheriting and open listener from ppid.
-	l, ppid, err := goagain.GetEnvs()
+	l, ppid, err = goagain.GetEnvs()
 
 	if nil != err {
 
-		// Listen on a TCP socket and accept connections in a new goroutine.
+		// Listen on a TCP or a UNIX domain socket (the latter is commented).
 		laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:48879")
 		if nil != err {
 			log.Fatalln(err)
 		}
 		log.Printf("listening on %v", laddr)
 		l, err = net.ListenTCP("tcp", laddr)
+		/*
+			laddr, err := net.ResolveUnixAddr("unix", "127.0.0.1:48879")
+			if nil != err {
+				log.Println(err)
+				os.Exit(1)
+			}
+			log.Printf("listening on %v", laddr)
+			l, err = net.ListenUnix("unix", laddr)
+		*/
 		if nil != err {
 			log.Fatalln(err)
 		}
+
+		// Accept connections in a new goroutine.
 		go serve(l)
 
 	} else {
@@ -56,9 +72,9 @@ func main() {
 
 }
 
-func serve(l *net.TCPListener) {
+func serve(l net.Listener) {
 	for {
-		c, err := l.AcceptTCP()
+		c, err := l.Accept()
 		if nil != err {
 			err = err.(*net.OpError).Err
 			if goagain.ErrClosing.Error() != err.Error() {
