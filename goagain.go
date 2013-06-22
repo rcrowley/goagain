@@ -22,7 +22,7 @@ var ErrClosing = errors.New("use of closed network connection")
 // and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
 func AwaitSignals(l net.Listener) error {
 	ch := make(chan os.Signal, 2)
-	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
+	signal.Notify(ch, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
 		sig := <-ch
 		log.Println(sig.String())
@@ -30,11 +30,11 @@ func AwaitSignals(l net.Listener) error {
 
 		// TODO SIGHUP should reload configuration.
 
-		// SIGQUIT should exit gracefully.  However, Go doesn't seem
-		// to like handling SIGQUIT (or any signal which dumps core by
-		// default) at all so SIGTERM takes its place.  How graceful
-		// this exit is depends on what the program does after this
-		// function returns control.
+		// SIGQUIT should exit gracefully.
+		case syscall.SIGQUIT:
+			return nil
+
+		// SIGTERM should exit.
 		case syscall.SIGTERM:
 			return nil
 
@@ -97,10 +97,10 @@ func GetEnvs() (l net.Listener, ppid int, err error) {
 	return
 }
 
-// Send SIGQUIT (but really SIGTERM since Go can't handle SIGQUIT) to the
-// given ppid in order to complete the handoff to the child process.
+// Send SIGQUIT to the given ppid in order to complete the handoff to the
+// child process.
 func KillParent(ppid int) error {
-	err := syscall.Kill(ppid, syscall.SIGTERM)
+	err := syscall.Kill(ppid, syscall.SIGQUIT)
 	if nil != err {
 		return err
 	}
