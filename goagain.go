@@ -45,7 +45,7 @@ func AwaitSignals(l net.Listener) error {
 		case syscall.SIGUSR2:
 			err := Relaunch(l)
 			if nil != err {
-				return err
+				log.Println(err)
 			}
 
 		}
@@ -106,6 +106,9 @@ func KillParent(ppid int) error {
 func Relaunch(l net.Listener) error {
 	argv0, err := exec.LookPath(os.Args[0])
 	if nil != err {
+		return err
+	}
+	if _, err := os.Stat(argv0); nil != err {
 		return err
 	}
 	wd, err := os.Getwd()
