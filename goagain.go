@@ -50,7 +50,6 @@ func AwaitSignals(l net.Listener) error {
 
 		}
 	}
-	return nil // It'll never get here.
 }
 
 // Convert and validate the GOAGAIN_FD, GOAGAIN_NAME, and GOAGAIN_PPID
@@ -100,11 +99,7 @@ func GetEnvs() (l net.Listener, ppid int, err error) {
 // Send SIGQUIT to the given ppid in order to complete the handoff to the
 // child process.
 func KillParent(ppid int) error {
-	err := syscall.Kill(ppid, syscall.SIGQUIT)
-	if nil != err {
-		return err
-	}
-	return nil
+	return syscall.Kill(ppid, syscall.SIGQUIT)
 }
 
 // Re-exec this image without dropping the listener passed to this function.
