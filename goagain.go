@@ -51,7 +51,7 @@ func AwaitSignals(l net.Listener) error {
 		}
 	}
 
-        return
+        return nil
 }
 
 // Convert and validate the GOAGAIN_FD, GOAGAIN_NAME, and GOAGAIN_PPID
