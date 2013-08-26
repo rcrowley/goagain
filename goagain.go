@@ -14,15 +14,15 @@ import (
 )
 
 var (
-	// OnSigHup is the function called when the server receives a SIGHUP
+	// OnSIGHUP is the function called when the server receives a SIGHUP
 	// signal. The normal use case for SIGHUP is to reload the
 	// configuration.
-	OnSigHup func(l net.Listener) error
+	OnSIGHUP func(l net.Listener) error
 
-	// OnSigUsr1 is the function called when the server receives a
+	// OnSIGUSR1 is the function called when the server receives a
 	// SIGUSR1 signal. The normal use case for SIGUSR1 is to repon the
 	// log files.
-	OnSigUsr1 func(l net.Listener) error
+	OnSIGUSR1 func(l net.Listener) error
 )
 
 // Export an error equivalent to net.errClosing for use with Accept during
@@ -42,8 +42,8 @@ func AwaitSignals(l net.Listener) error {
 
 		// SIGHUP should reload configuration.
 		case syscall.SIGHUP:
-			if OnSigHup != nil {
-				err := OnSigHup(l)
+			if OnSIGHUP != nil {
+				err := OnSIGHUP(l)
 				if err != nil {
 					log.Println("result of OnSigHup:", err)
 				}
@@ -59,8 +59,8 @@ func AwaitSignals(l net.Listener) error {
 
 		// SIGUSR1 should reopen logs.
 		case syscall.SIGUSR1:
-			if OnSigUsr1 != nil {
-				err := OnSigUsr1(l)
+			if OnSIGUSR1 != nil {
+				err := OnSIGUSR1(l)
 				if err != nil {
 					log.Println("result of OnSigUsr1:", err)
 				}
