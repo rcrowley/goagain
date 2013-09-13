@@ -29,12 +29,19 @@ var (
 // a graceful exit.
 var ErrClosing = errors.New("use of closed network connection")
 
-// Block this goroutine awaiting signals.  With the exception of SIGTERM
-// taking the place of SIGQUIT, signals are handled exactly as in Nginx
-// and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
+// Block this goroutine awaiting signals.  Signals are handled as they
+// are by Nginx and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
 func AwaitSignals(l net.Listener) error {
 	ch := make(chan os.Signal, 2)
-	signal.Notify(ch, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGUSR2)
+	signal.Notify(
+		ch,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+		syscall.SIGTERM,
+		syscall.SIGUSR1,
+		syscall.SIGUSR2,
+	)
 	for {
 		sig := <-ch
 		log.Println(sig.String())
@@ -42,12 +49,15 @@ func AwaitSignals(l net.Listener) error {
 
 		// SIGHUP should reload configuration.
 		case syscall.SIGHUP:
-			if OnSIGHUP != nil {
-				err := OnSIGHUP(l)
-				if err != nil {
-					log.Println("result of OnSigHup:", err)
+			if nil != OnSIGHUP {
+				if err := OnSIGHUP(l); nil != err {
+					log.Println("OnSIGHUP:", err)
 				}
 			}
+
+		// SIGINT should exit.
+		case syscall.SIGINT:
+			return nil
 
 		// SIGQUIT should exit gracefully.
 		case syscall.SIGQUIT:
@@ -59,10 +69,9 @@ func AwaitSignals(l net.Listener) error {
 
 		// SIGUSR1 should reopen logs.
 		case syscall.SIGUSR1:
-			if OnSIGUSR1 != nil {
-				err := OnSIGUSR1(l)
-				if err != nil {
-					log.Println("result of OnSigUsr1:", err)
+			if nil != OnSIGUSR1 {
+				if err := OnSIGUSR1(l); nil != err {
+					log.Println("OnSIGUSR1:", err)
 				}
 			}
 
