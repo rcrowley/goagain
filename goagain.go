@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"reflect"
 	"syscall"
 )
@@ -148,10 +149,7 @@ func Relaunch(l net.Listener) error {
 	if _, err := os.Stat(argv0); nil != err {
 		return err
 	}
-	wd, err := os.Getwd()
-	if nil != err {
-		return err
-	}
+	wd := filepath.Dir(os.Args[0])
 	v := reflect.ValueOf(l).Elem().FieldByName("fd").Elem()
 	fd := uintptr(v.FieldByName("sysfd").Int())
 	if err := os.Setenv("GOAGAIN_FD", fmt.Sprint(fd)); nil != err {
