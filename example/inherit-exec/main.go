@@ -4,6 +4,7 @@ import (
 	"github.com/rcrowley/goagain"
 	"log"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,8 @@ func main() {
 	// this process is a child that's inheriting and open listener from ppid.
 	l, ppid, err = goagain.GetEnvs()
 
+	ch := make(chan struct{})
+	wg := &sync.WaitGroup{}
 	if nil != err {
 
 		// Listen on a TCP or a UNIX domain socket (the latter is commented).
@@ -44,13 +47,13 @@ func main() {
 		}
 
 		// Accept connections in a new goroutine.
-		go serve(l)
+		go serve(l, ch, wg)
 
 	} else {
 
 		// Resume listening and accepting connections in a new goroutine.
 		log.Printf("resuming listening on %v", l.Addr())
-		go serve(l)
+		go serve(l, ch, wg)
 
 		// Kill the parent, now that the child has started successfully.
 		if err := goagain.KillParent(ppid); nil != err {
@@ -58,6 +61,45 @@ func main() {
 		}
 
 	}
+
+
+
+/*
+
+inherit parent:
+
+1. AwaitSignals (SIGUSR2)
+2. Relaunch (rename this, please; it's not *really* public API, anyway)
+3. AwaitSignals (SIGQUIT)
+
+inherit child:
+
+1. GetEnvs
+2. go serve
+3. KillParent (SIGQUIT)
+4. AwaitSignals
+
+----
+
+inherit-exec parent:
+
+1. AwaitSignals (SIGUSR2)
+2. Relaunch (rename this, please; it's not *really* public API, anyway)
+3. AwaitSignals (SIGUSR2)
+4. Exec (TODO name)
+5. KillChild (SIGQUIT)
+
+inherit-exec child:
+
+1. GetEnvs
+2. go serve
+3. KillParent (SIGUSR2)
+4. AwaitSignals
+
+*/
+
+
+
 
 	// Block the main goroutine awaiting signals.
 	if err := goagain.AwaitSignals(l); nil != err {
@@ -73,13 +115,22 @@ func main() {
 	}
 	time.Sleep(1e9)
 
+	// Now re-exec the parent process
+
 }
 
-func serve(l net.Listener) {
+func serve(l net.Listener, ch chan struct{}, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
+		select {
+		case <-ch:
+			break
+		default:
+		}
+		l.SetDeadline(time.Now().Add(100e6))
 		c, err := l.Accept()
 		if nil != err {
-			if goagain.IsErrClosing(err) {
+			if goagain.IsErrClosing(err) || err.(*net.OpError).Timeout() {
 				break
 			}
 			log.Fatalln(err)
