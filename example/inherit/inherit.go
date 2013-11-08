@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+func init() {
+	log.SetFlags(log.Lmicroseconds | log.Lshortfile)
+}
+
 func main() {
 	var (
 		err error
@@ -30,8 +34,7 @@ func main() {
 		/*
 			laddr, err := net.ResolveUnixAddr("unix", "127.0.0.1:48879")
 			if nil != err {
-				log.Println(err)
-				os.Exit(1)
+				log.Fatalln(err)
 			}
 			log.Printf("listening on %v", laddr)
 			l, err = net.ListenUnix("unix", laddr)
@@ -76,11 +79,10 @@ func serve(l net.Listener) {
 	for {
 		c, err := l.Accept()
 		if nil != err {
-			err = err.(*net.OpError).Err
-			if goagain.ErrClosing.Error() != err.Error() {
-				log.Fatalln(err)
+			if goagain.IsErrClosing(err) {
+				break
 			}
-			break
+			log.Fatalln(err)
 		}
 		c.Write([]byte("Hello, world!\n"))
 		c.Close()

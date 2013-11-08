@@ -25,10 +25,6 @@ var (
 	OnSIGUSR1 func(l net.Listener) error
 )
 
-// Export an error equivalent to net.errClosing for use with Accept during
-// a graceful exit.
-var ErrClosing = errors.New("use of closed network connection")
-
 // Block this goroutine awaiting signals.  Signals are handled as they
 // are by Nginx and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
 func AwaitSignals(l net.Listener) error {
@@ -131,6 +127,15 @@ func GetEnvs() (l net.Listener, ppid int, err error) {
 		return
 	}
 	return
+}
+
+// Test whether an error is equivalent to net.errClosing as returned by
+// Accept during a graceful exit.
+func IsErrClosing(err error) bool {
+	if opErr, ok := err.(*net.OpError); ok {
+		err = opErr.Err
+	}
+	return "use of closed network connection" == err.Error()
 }
 
 // Send SIGQUIT to the given ppid in order to complete the handoff to the
