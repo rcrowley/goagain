@@ -102,7 +102,7 @@ inherit-exec child:
 
 
 	// Block the main goroutine awaiting signals.
-	if err := goagain.AwaitSignals(l); nil != err {
+	if err := goagain.Wait(l); nil != err {
 		log.Fatalln(err)
 	}
 

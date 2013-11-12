@@ -25,66 +25,6 @@ var (
 	OnSIGUSR1 func(l net.Listener) error
 )
 
-// Block this goroutine awaiting signals.  Signals are handled as they
-// are by Nginx and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
-func AwaitSignals(l net.Listener) error {
-	ch := make(chan os.Signal, 2)
-	signal.Notify(
-		ch,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-		syscall.SIGTERM,
-		syscall.SIGUSR1,
-		syscall.SIGUSR2,
-	)
-	for {
-		sig := <-ch
-		log.Println(sig.String())
-		switch sig {
-
-		// SIGHUP should reload configuration.
-		case syscall.SIGHUP:
-			if nil != OnSIGHUP {
-				if err := OnSIGHUP(l); nil != err {
-					log.Println("OnSIGHUP:", err)
-				}
-			}
-
-		// SIGINT should exit.
-		case syscall.SIGINT:
-			return nil
-
-		// SIGQUIT should exit gracefully.
-		case syscall.SIGQUIT:
-			return nil
-
-		// SIGTERM should exit.
-		case syscall.SIGTERM:
-			return nil
-
-		// SIGUSR1 should reopen logs.
-		case syscall.SIGUSR1:
-			if nil != OnSIGUSR1 {
-				if err := OnSIGUSR1(l); nil != err {
-					log.Println("OnSIGUSR1:", err)
-				}
-			}
-
-		// SIGUSR2 begins the process of restarting without dropping
-		// the listener passed to this function.
-		case syscall.SIGUSR2:
-			err := ForkExec(l)
-			if nil != err {
-				log.Println(err)
-			}
-
-		}
-	}
-
-	return nil
-}
-
 // Fork and re-exec this same image without dropping the net.Listener.
 func ForkExec(l net.Listener) error {
 	argv0, err := exec.LookPath(os.Args[0])
@@ -184,4 +124,65 @@ func IsErrClosing(err error) bool {
 // child process.
 func KillParent(ppid int) error {
 	return syscall.Kill(ppid, syscall.SIGQUIT)
+}
+
+// Block this goroutine awaiting signals.  Signals are handled as they
+// are by Nginx and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
+func Wait(l net.Listener) error {
+	ch := make(chan os.Signal, 2)
+	signal.Notify(
+		ch,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+		syscall.SIGTERM,
+		syscall.SIGUSR1,
+		syscall.SIGUSR2,
+	)
+	//forked := false
+	for {
+		sig := <-ch
+		log.Println(sig.String())
+		switch sig {
+
+		// SIGHUP should reload configuration.
+		case syscall.SIGHUP:
+			if nil != OnSIGHUP {
+				if err := OnSIGHUP(l); nil != err {
+					log.Println("OnSIGHUP:", err)
+				}
+			}
+
+		// SIGINT should exit.
+		case syscall.SIGINT:
+			return nil
+
+		// SIGQUIT should exit gracefully.
+		case syscall.SIGQUIT:
+			return nil
+
+		// SIGTERM should exit.
+		case syscall.SIGTERM:
+			return nil
+
+		// SIGUSR1 should reopen logs.
+		case syscall.SIGUSR1:
+			if nil != OnSIGUSR1 {
+				if err := OnSIGUSR1(l); nil != err {
+					log.Println("OnSIGUSR1:", err)
+				}
+			}
+
+		// SIGUSR2 begins the process of restarting without dropping
+		// the listener passed to this function.
+		case syscall.SIGUSR2:
+			err := ForkExec(l)
+			if nil != err {
+				log.Println(err)
+			}
+
+		}
+	}
+
+	return nil
 }
