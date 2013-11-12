@@ -2,49 +2,35 @@ package main
 
 import (
 	"github.com/rcrowley/goagain"
+	"fmt"
 	"log"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 )
 
 func init() {
+	goagain.Strategy = goagain.InheritExec
 	log.SetFlags(log.Lmicroseconds | log.Lshortfile)
+	log.SetPrefix(fmt.Sprintf("pid:%d ", syscall.Getpid()))
 }
 
 func main() {
-	var (
-		err error
-		l net.Listener
-		ppid int
-	)
 
-	// Get the listener and ppid from the environment.  If this is successful,
-	// this process is a child that's inheriting and open listener from ppid.
-	l, ppid, err = goagain.GetEnvs()
-
+	// Inherit a net.Listener from our parent process or listen anew.
 	ch := make(chan struct{})
 	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	l, err := goagain.Listener()
 	if nil != err {
 
-		// Listen on a TCP or a UNIX domain socket (the latter is commented).
-		laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:48879")
+		// Listen on a TCP or a UNIX domain socket (TCP here).
+		l, err = net.Listen("tcp", "127.0.0.1:48879")
 		if nil != err {
 			log.Fatalln(err)
 		}
-		log.Printf("listening on %v", laddr)
-		l, err = net.ListenTCP("tcp", laddr)
-		/*
-			laddr, err := net.ResolveUnixAddr("unix", "127.0.0.1:48879")
-			if nil != err {
-				log.Fatalln(err)
-			}
-			log.Printf("listening on %v", laddr)
-			l, err = net.ListenUnix("unix", laddr)
-		*/
-		if nil != err {
-			log.Fatalln(err)
-		}
+		log.Printf("listening on %v", l.Addr())
 
 		// Accept connections in a new goroutine.
 		go serve(l, ch, wg)
@@ -55,8 +41,9 @@ func main() {
 		log.Printf("resuming listening on %v", l.Addr())
 		go serve(l, ch, wg)
 
-		// Kill the parent, now that the child has started successfully.
-		if err := goagain.KillParent(ppid); nil != err {
+		// If this is the child, send the parent SIGUSR2.  If this is the
+		// parent, send the child SIGQUIT.
+		if err := goagain.Kill(); nil != err {
 			log.Fatalln(err)
 		}
 
@@ -68,33 +55,42 @@ func main() {
 
 inherit parent:
 
-1. AwaitSignals (SIGUSR2)
-2. Relaunch (rename this, please; it's not *really* public API, anyway)
-3. AwaitSignals (SIGQUIT)
+1. Wait (SIGUSR2)
+2. ForkExec
+3. Wait (SIGQUIT)
+4. ...
 
 inherit child:
 
-1. GetEnvs
+1. Listner
 2. go serve
-3. KillParent (SIGQUIT)
-4. AwaitSignals
+3. Kill (SIGQUIT)
+4. Wait (we're now the parent and back at the beginning)
 
 ----
 
 inherit-exec parent:
 
-1. AwaitSignals (SIGUSR2)
-2. Relaunch (rename this, please; it's not *really* public API, anyway)
-3. AwaitSignals (SIGUSR2)
-4. Exec (TODO name)
-5. KillChild (SIGQUIT)
+1. Wait (SIGUSR2)
+2. ForkExec
+3. Wait (SIGUSR2)
+4. ...
+5. Exec
+6. Kill (SIGQUIT)
+7. Wait (we're still the parent and back at the beginning)
 
 inherit-exec child:
 
-1. GetEnvs
+GOAGAIN_FD
+GOAGAIN_NAME
+GOAGAIN_PID
+GOAGAIN_SIGNAL
+
+1. Listener
 2. go serve
-3. KillParent (SIGUSR2)
-4. AwaitSignals
+3. Kill (SIGUSR2)
+4. Wait (SIGQUIT)
+5. ...
 
 */
 
@@ -102,20 +98,25 @@ inherit-exec child:
 
 
 	// Block the main goroutine awaiting signals.
-	if err := goagain.Wait(l); nil != err {
+	sig, err := goagain.Wait(l)
+	if nil != err {
 		log.Fatalln(err)
 	}
 
 	// Do whatever's necessary to ensure a graceful exit like waiting for
 	// goroutines to terminate or a channel to become closed.
 	//
-	// In this case, we'll simply stop listening and wait one second.
-	if err := l.Close(); nil != err {
-		log.Fatalln(err)
-	}
-	time.Sleep(1e9)
+	// In this case, we'll close the channel to signal the goroutine to stop
+	// accepting connections and wait for the goroutine to exit.
+	close(ch)
+	wg.Wait()
 
-	// Now re-exec the parent process
+	// Now re-exec the parent process.
+	if goagain.SIGUSR2 == sig {
+		if err := goagain.Exec(l); nil != err {
+			log.Fatalln(err)
+		}
+	}
 
 }
 
@@ -127,7 +128,7 @@ func serve(l net.Listener, ch chan struct{}, wg *sync.WaitGroup) {
 			break
 		default:
 		}
-		l.SetDeadline(time.Now().Add(100e6))
+		l.(*net.TCPListener).SetDeadline(time.Now().Add(100e6)) // XXX
 		c, err := l.Accept()
 		if nil != err {
 			if goagain.IsErrClosing(err) || err.(*net.OpError).Timeout() {

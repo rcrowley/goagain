@@ -2,65 +2,49 @@ package main
 
 import (
 	"github.com/rcrowley/goagain"
+	"fmt"
 	"log"
 	"net"
+	"syscall"
 	"time"
 )
 
 func init() {
 	log.SetFlags(log.Lmicroseconds | log.Lshortfile)
+	log.SetPrefix(fmt.Sprintf("pid:%d ", syscall.Getpid()))
 }
 
 func main() {
-	var (
-		err error
-		l net.Listener
-		ppid int
-	)
 
-	// Get the listener and ppid from the environment.  If this is successful,
-	// this process is a child that's inheriting and open listener from ppid.
-	l, ppid, err = goagain.GetEnvs()
-
+	// Inherit a net.Listener from our parent process or listen anew.
+	l, err := goagain.Listener()
 	if nil != err {
 
-		// Listen on a TCP or a UNIX domain socket (the latter is commented).
-		laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:48879")
+		// Listen on a TCP or a UNIX domain socket (TCP here).
+		l, err = net.Listen("tcp", "127.0.0.1:48879")
 		if nil != err {
 			log.Fatalln(err)
 		}
-		log.Printf("listening on %v", laddr)
-		l, err = net.ListenTCP("tcp", laddr)
-		/*
-			laddr, err := net.ResolveUnixAddr("unix", "127.0.0.1:48879")
-			if nil != err {
-				log.Fatalln(err)
-			}
-			log.Printf("listening on %v", laddr)
-			l, err = net.ListenUnix("unix", laddr)
-		*/
-		if nil != err {
-			log.Fatalln(err)
-		}
+		log.Printf("listening on %v", l.Addr())
 
 		// Accept connections in a new goroutine.
 		go serve(l)
 
 	} else {
 
-		// Resume listening and accepting connections in a new goroutine.
+		// Resume accepting connections in a new goroutine.
 		log.Printf("resuming listening on %v", l.Addr())
 		go serve(l)
 
 		// Kill the parent, now that the child has started successfully.
-		if err := goagain.KillParent(ppid); nil != err {
+		if err := goagain.Kill(); nil != err {
 			log.Fatalln(err)
 		}
 
 	}
 
 	// Block the main goroutine awaiting signals.
-	if err := goagain.Wait(l); nil != err {
+	if _, err := goagain.Wait(l); nil != err {
 		log.Fatalln(err)
 	}
 

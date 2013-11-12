@@ -2,7 +2,6 @@
 package goagain
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -11,6 +10,28 @@ import (
 	"os/signal"
 	"reflect"
 	"syscall"
+	"time"
+)
+
+type strategy int
+
+const (
+	// The Inherit strategy: parent forks child to run new code with inherited
+	// listener; child kills parent and becomes a child of init(8).
+	Inherit strategy = iota
+
+	// The InheritExec strategy: parent forks child to run new code with
+	// inherited listener; child signals parent to exec to run new code;
+	// parent kills child.
+	InheritExec
+)
+
+// Don't make the caller import syscall.
+const (
+	SIGINT = syscall.SIGINT
+	SIGQUIT = syscall.SIGQUIT
+	SIGTERM = syscall.SIGTERM
+	SIGUSR2 = syscall.SIGUSR2
 )
 
 var (
@@ -23,37 +44,51 @@ var (
 	// SIGUSR1 signal. The normal use case for SIGUSR1 is to repon the
 	// log files.
 	OnSIGUSR1 func(l net.Listener) error
+
+	// The strategy to use.
+	Strategy strategy = Inherit
 )
 
-// Fork and re-exec this same image without dropping the net.Listener.
-func ForkExec(l net.Listener) error {
-	argv0, err := exec.LookPath(os.Args[0])
+// Re-exec this same image without dropping the net.Listener.
+func Exec(l net.Listener) error {
+	var pid int
+	fmt.Sscan(os.Getenv("GOAGAIN_PID"), &pid)
+	if syscall.Getppid() == pid {
+		return fmt.Errorf("goagain.Exec called by a child process")
+	}
+	argv0, err := lookPath()
 	if nil != err {
 		return err
 	}
-	if _, err := os.Stat(argv0); nil != err {
+	if _, err := setEnvs(l); nil != err {
+		return err
+	}
+	return syscall.Exec(argv0, os.Args, os.Environ())
+}
+
+// Fork and re-exec this same image without dropping the net.Listener.
+func ForkExec(l net.Listener) error {
+	argv0, err := lookPath()
+	if nil != err {
 		return err
 	}
 	wd, err := os.Getwd()
 	if nil != err {
 		return err
 	}
-	v := reflect.ValueOf(l).Elem().FieldByName("fd").Elem()
-	fd := uintptr(v.FieldByName("sysfd").Int())
-	if err := os.Setenv("GOAGAIN_FD", fmt.Sprint(fd)); nil != err {
-		return err
-	}
-	if err := os.Setenv("GOAGAIN_NAME", fmt.Sprintf("tcp:%s->", l.Addr().String())); nil != err {
-		return err
-	}
-	if err := os.Setenv("GOAGAIN_PPID", fmt.Sprint(syscall.Getpid())); nil != err {
+	fd, err := setEnvs(l)
+	if nil != err {
 		return err
 	}
 	files := make([]*os.File, fd+1)
 	files[syscall.Stdin] = os.Stdin
 	files[syscall.Stdout] = os.Stdout
 	files[syscall.Stderr] = os.Stderr
-	files[fd] = os.NewFile(fd, string(v.FieldByName("sysfile").String()))
+	addr := l.Addr()
+	files[fd] = os.NewFile(
+		fd,
+		fmt.Sprintf("%s:%s->", addr.Network(), addr.String()),
+	)
 	p, err := os.StartProcess(argv0, os.Args, &os.ProcAttr{
 		Dir:   wd,
 		Env:   os.Environ(),
@@ -64,51 +99,10 @@ func ForkExec(l net.Listener) error {
 		return err
 	}
 	log.Printf("spawned child %d\n", p.Pid)
+	if err = os.Setenv("GOAGAIN_PID", fmt.Sprint(p.Pid)); nil != err {
+		return err
+	}
 	return nil
-}
-
-// Convert and validate the GOAGAIN_FD, GOAGAIN_NAME, and GOAGAIN_PPID
-// environment variables.  If all three are present and in order, this
-// is a child process that may pick up where the parent left off.
-func GetEnvs() (l net.Listener, ppid int, err error) {
-	var fd uintptr
-	_, err = fmt.Sscan(os.Getenv("GOAGAIN_FD"), &fd)
-	if nil != err {
-		return
-	}
-	var i net.Listener
-	i, err = net.FileListener(os.NewFile(fd, os.Getenv("GOAGAIN_NAME")))
-	if nil != err {
-		return
-	}
-	switch i.(type) {
-	case *net.TCPListener:
-		l = i.(*net.TCPListener)
-	case *net.UnixListener:
-		l = i.(*net.UnixListener)
-	default:
-		err = errors.New(fmt.Sprintf(
-			"file descriptor is %T not *net.TCPListener or *net.UnixListener",
-			i,
-		))
-		return
-	}
-	if err = syscall.Close(int(fd)); nil != err {
-		return
-	}
-	_, err = fmt.Sscan(os.Getenv("GOAGAIN_PPID"), &ppid)
-	if nil != err {
-		return
-	}
-	if syscall.Getppid() != ppid {
-		err = errors.New(fmt.Sprintf(
-			"GOAGAIN_PPID is %d but parent is %d",
-			ppid,
-			syscall.Getppid(),
-		))
-		return
-	}
-	return
 }
 
 // Test whether an error is equivalent to net.errClosing as returned by
@@ -120,15 +114,58 @@ func IsErrClosing(err error) bool {
 	return "use of closed network connection" == err.Error()
 }
 
-// Send SIGQUIT to the given ppid in order to complete the handoff to the
-// child process.
-func KillParent(ppid int) error {
-	return syscall.Kill(ppid, syscall.SIGQUIT)
+// TODO
+func Kill() error {
+	var (
+		pid int
+		sig syscall.Signal
+	)
+	if _, err := fmt.Sscan(os.Getenv("GOAGAIN_PID"), &pid); nil != err {
+		if _, err := fmt.Sscan(os.Getenv("GOAGAIN_PPID"), &pid); nil != err {
+			return err
+		}
+		return err
+	}
+	if _, err := fmt.Sscan(os.Getenv("GOAGAIN_SIGNAL"), &sig); nil != err {
+		sig = syscall.SIGQUIT
+	}
+	log.Printf("sending signal %d to process %d", sig, pid)
+	return syscall.Kill(pid, sig)
+}
+
+// TODO
+func Listener() (l net.Listener, err error) {
+	var fd uintptr
+	if _, err = fmt.Sscan(os.Getenv("GOAGAIN_FD"), &fd); nil != err {
+		return
+	}
+log.Println("Listener fd:", fd)
+	l, err = net.FileListener(os.NewFile(fd, os.Getenv("GOAGAIN_NAME")))
+	if nil != err {
+log.Println(err)
+		return
+	}
+	switch l.(type) {
+	case *net.TCPListener, *net.UnixListener:
+	default:
+		err = fmt.Errorf(
+			"file descriptor is %T not *net.TCPListener or *net.UnixListener",
+			l,
+		)
+		return
+	}
+log.Println("Close", fd)
+log.Println("DO IT"); time.Sleep(20e9)
+	if err = syscall.Close(int(fd)); nil != err {
+		return
+	}
+log.Println("DO IT"); time.Sleep(20e9)
+	return
 }
 
 // Block this goroutine awaiting signals.  Signals are handled as they
 // are by Nginx and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
-func Wait(l net.Listener) error {
+func Wait(l net.Listener) (syscall.Signal, error) {
 	ch := make(chan os.Signal, 2)
 	signal.Notify(
 		ch,
@@ -139,7 +176,7 @@ func Wait(l net.Listener) error {
 		syscall.SIGUSR1,
 		syscall.SIGUSR2,
 	)
-	//forked := false
+	forked := false
 	for {
 		sig := <-ch
 		log.Println(sig.String())
@@ -155,15 +192,15 @@ func Wait(l net.Listener) error {
 
 		// SIGINT should exit.
 		case syscall.SIGINT:
-			return nil
+			return syscall.SIGINT, nil
 
 		// SIGQUIT should exit gracefully.
 		case syscall.SIGQUIT:
-			return nil
+			return syscall.SIGQUIT, nil
 
 		// SIGTERM should exit.
 		case syscall.SIGTERM:
-			return nil
+			return syscall.SIGTERM, nil
 
 		// SIGUSR1 should reopen logs.
 		case syscall.SIGUSR1:
@@ -173,16 +210,60 @@ func Wait(l net.Listener) error {
 				}
 			}
 
-		// SIGUSR2 begins the process of restarting without dropping
-		// the listener passed to this function.
+		// SIGUSR2 forks and re-execs the first time it is received and execs
+		// without forking from then on.
 		case syscall.SIGUSR2:
-			err := ForkExec(l)
-			if nil != err {
-				log.Println(err)
+			if forked {
+				return syscall.SIGUSR2, nil
+			}
+			forked = true
+			if err := ForkExec(l); nil != err {
+				return syscall.SIGUSR2, err
 			}
 
 		}
 	}
+}
 
-	return nil
+func lookPath() (argv0 string, err error) {
+	argv0, err = exec.LookPath(os.Args[0])
+	if nil != err {
+		return
+	}
+	if _, err = os.Stat(argv0); nil != err {
+		return
+	}
+	return
+}
+
+func setEnvs(l net.Listener) (fd uintptr, err error) {
+	v := reflect.ValueOf(l).Elem().FieldByName("fd").Elem()
+	fd = uintptr(v.FieldByName("sysfd").Int())
+log.Println("setEnvs fd:", fd)
+	if err = os.Setenv("GOAGAIN_FD", fmt.Sprint(fd)); nil != err {
+		return
+	}
+	addr := l.Addr()
+	if err = os.Setenv(
+		"GOAGAIN_NAME",
+		fmt.Sprintf("%s:%s->", addr.Network(), addr.String()),
+	); nil != err {
+		return
+	}
+	if err = os.Setenv(
+		"GOAGAIN_PID",
+		fmt.Sprint(syscall.Getpid()),
+	); nil != err {
+		return
+	}
+	var sig syscall.Signal
+	if InheritExec == Strategy {
+		sig = syscall.SIGUSR2
+	} else {
+		sig = syscall.SIGQUIT
+	}
+	if err = os.Setenv("GOAGAIN_SIGNAL", fmt.Sprintf("%d", sig)); nil != err {
+		return
+	}
+	return
 }
