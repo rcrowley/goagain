@@ -74,7 +74,7 @@ func AwaitSignals(l net.Listener) error {
 		// SIGUSR2 begins the process of restarting without dropping
 		// the listener passed to this function.
 		case syscall.SIGUSR2:
-			err := Relaunch(l)
+			err := ForkExec(l)
 			if nil != err {
 				log.Println(err)
 			}
@@ -82,6 +82,48 @@ func AwaitSignals(l net.Listener) error {
 		}
 	}
 
+	return nil
+}
+
+// Fork and re-exec this same image without dropping the net.Listener.
+func ForkExec(l net.Listener) error {
+	argv0, err := exec.LookPath(os.Args[0])
+	if nil != err {
+		return err
+	}
+	if _, err := os.Stat(argv0); nil != err {
+		return err
+	}
+	wd, err := os.Getwd()
+	if nil != err {
+		return err
+	}
+	v := reflect.ValueOf(l).Elem().FieldByName("fd").Elem()
+	fd := uintptr(v.FieldByName("sysfd").Int())
+	if err := os.Setenv("GOAGAIN_FD", fmt.Sprint(fd)); nil != err {
+		return err
+	}
+	if err := os.Setenv("GOAGAIN_NAME", fmt.Sprintf("tcp:%s->", l.Addr().String())); nil != err {
+		return err
+	}
+	if err := os.Setenv("GOAGAIN_PPID", fmt.Sprint(syscall.Getpid())); nil != err {
+		return err
+	}
+	files := make([]*os.File, fd+1)
+	files[syscall.Stdin] = os.Stdin
+	files[syscall.Stdout] = os.Stdout
+	files[syscall.Stderr] = os.Stderr
+	files[fd] = os.NewFile(fd, string(v.FieldByName("sysfile").String()))
+	p, err := os.StartProcess(argv0, os.Args, &os.ProcAttr{
+		Dir:   wd,
+		Env:   os.Environ(),
+		Files: files,
+		Sys:   &syscall.SysProcAttr{},
+	})
+	if nil != err {
+		return err
+	}
+	log.Printf("spawned child %d\n", p.Pid)
 	return nil
 }
 
@@ -142,46 +184,4 @@ func IsErrClosing(err error) bool {
 // child process.
 func KillParent(ppid int) error {
 	return syscall.Kill(ppid, syscall.SIGQUIT)
-}
-
-// Re-exec this image without dropping the listener passed to this function.
-func Relaunch(l net.Listener) error {
-	argv0, err := exec.LookPath(os.Args[0])
-	if nil != err {
-		return err
-	}
-	if _, err := os.Stat(argv0); nil != err {
-		return err
-	}
-	wd, err := os.Getwd()
-	if nil != err {
-		return err
-	}
-	v := reflect.ValueOf(l).Elem().FieldByName("fd").Elem()
-	fd := uintptr(v.FieldByName("sysfd").Int())
-	if err := os.Setenv("GOAGAIN_FD", fmt.Sprint(fd)); nil != err {
-		return err
-	}
-	if err := os.Setenv("GOAGAIN_NAME", fmt.Sprintf("tcp:%s->", l.Addr().String())); nil != err {
-		return err
-	}
-	if err := os.Setenv("GOAGAIN_PPID", fmt.Sprint(syscall.Getpid())); nil != err {
-		return err
-	}
-	files := make([]*os.File, fd+1)
-	files[syscall.Stdin] = os.Stdin
-	files[syscall.Stdout] = os.Stdout
-	files[syscall.Stderr] = os.Stderr
-	files[fd] = os.NewFile(fd, string(v.FieldByName("sysfile").String()))
-	p, err := os.StartProcess(argv0, os.Args, &os.ProcAttr{
-		Dir:   wd,
-		Env:   os.Environ(),
-		Files: files,
-		Sys:   &syscall.SysProcAttr{},
-	})
-	if nil != err {
-		return err
-	}
-	log.Printf("spawned child %d\n", p.Pid)
-	return nil
 }
