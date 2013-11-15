@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"reflect"
 	"syscall"
-	"time"
 )
 
 type strategy int
@@ -78,6 +77,12 @@ func ForkExec(l net.Listener) error {
 	}
 	fd, err := setEnvs(l)
 	if nil != err {
+		return err
+	}
+	if err := os.Setenv(
+		"GOAGAIN_PID",
+		fmt.Sprint(syscall.Getpid()),
+	); nil != err {
 		return err
 	}
 	files := make([]*os.File, fd+1)
@@ -155,11 +160,9 @@ log.Println(err)
 		return
 	}
 log.Println("Close", fd)
-log.Println("DO IT"); time.Sleep(20e9)
 	if err = syscall.Close(int(fd)); nil != err {
 		return
 	}
-log.Println("DO IT"); time.Sleep(20e9)
 	return
 }
 
@@ -240,6 +243,13 @@ func setEnvs(l net.Listener) (fd uintptr, err error) {
 	v := reflect.ValueOf(l).Elem().FieldByName("fd").Elem()
 	fd = uintptr(v.FieldByName("sysfd").Int())
 log.Println("setEnvs fd:", fd)
+	r0, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, fd, syscall.F_SETFD, 0)
+	val := int(r0)
+	log.Println("val:", val, "e1: ", e1)
+	if 0 != e1 {
+		err = e1
+		return
+	}
 	if err = os.Setenv("GOAGAIN_FD", fmt.Sprint(fd)); nil != err {
 		return
 	}
@@ -247,12 +257,6 @@ log.Println("setEnvs fd:", fd)
 	if err = os.Setenv(
 		"GOAGAIN_NAME",
 		fmt.Sprintf("%s:%s->", addr.Network(), addr.String()),
-	); nil != err {
-		return
-	}
-	if err = os.Setenv(
-		"GOAGAIN_PID",
-		fmt.Sprint(syscall.Getpid()),
 	); nil != err {
 		return
 	}
