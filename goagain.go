@@ -3,6 +3,7 @@ package goagain
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -62,10 +63,17 @@ func Exec(l net.Listener) error {
 	if _, err := setEnvs(l); nil != err {
 		return err
 	}
+	if err := os.Setenv(
+		"GOAGAIN_SIGNAL",
+		fmt.Sprintf("%d", syscall.SIGQUIT),
+	); nil != err {
+		return err
+	}
+	log.Println("re-executing", argv0)
 	return syscall.Exec(argv0, os.Args, os.Environ())
 }
 
-// Fork and re-exec this same image without dropping the net.Listener.
+// Fork and exec this same image without dropping the net.Listener.
 func ForkExec(l net.Listener) error {
 	argv0, err := lookPath()
 	if nil != err {
@@ -79,10 +87,22 @@ func ForkExec(l net.Listener) error {
 	if nil != err {
 		return err
 	}
+	if err := os.Setenv("GOAGAIN_PID", ""); nil != err {
+		return err
+	}
 	if err := os.Setenv(
-		"GOAGAIN_PID",
+		"GOAGAIN_PPID",
 		fmt.Sprint(syscall.Getpid()),
 	); nil != err {
+		return err
+	}
+	var sig syscall.Signal
+	if InheritExec == Strategy {
+		sig = syscall.SIGUSR2
+	} else {
+		sig = syscall.SIGQUIT
+	}
+	if err := os.Setenv("GOAGAIN_SIGNAL", fmt.Sprintf("%d", sig)); nil != err {
 		return err
 	}
 	files := make([]*os.File, fd+1)
@@ -119,16 +139,18 @@ func IsErrClosing(err error) bool {
 	return "use of closed network connection" == err.Error()
 }
 
-// TODO
+// Kill process specified in the environment with the signal specified in the
+// environment; default to SIGQUIT.
 func Kill() error {
 	var (
 		pid int
 		sig syscall.Signal
 	)
-	if _, err := fmt.Sscan(os.Getenv("GOAGAIN_PID"), &pid); nil != err {
-		if _, err := fmt.Sscan(os.Getenv("GOAGAIN_PPID"), &pid); nil != err {
-			return err
-		}
+	_, err := fmt.Sscan(os.Getenv("GOAGAIN_PID"), &pid)
+	if io.EOF == err {
+		_, err = fmt.Sscan(os.Getenv("GOAGAIN_PPID"), &pid)
+	}
+	if nil != err {
 		return err
 	}
 	if _, err := fmt.Sscan(os.Getenv("GOAGAIN_SIGNAL"), &sig); nil != err {
@@ -138,16 +160,15 @@ func Kill() error {
 	return syscall.Kill(pid, sig)
 }
 
-// TODO
+// Reconstruct a net.Listener from a file descriptior and name specified in the
+// environment.  Deal with Go's insistence on dup(2)ing file descriptors.
 func Listener() (l net.Listener, err error) {
 	var fd uintptr
 	if _, err = fmt.Sscan(os.Getenv("GOAGAIN_FD"), &fd); nil != err {
 		return
 	}
-log.Println("Listener fd:", fd)
 	l, err = net.FileListener(os.NewFile(fd, os.Getenv("GOAGAIN_NAME")))
 	if nil != err {
-log.Println(err)
 		return
 	}
 	switch l.(type) {
@@ -159,7 +180,6 @@ log.Println(err)
 		)
 		return
 	}
-log.Println("Close", fd)
 	if err = syscall.Close(int(fd)); nil != err {
 		return
 	}
@@ -242,10 +262,7 @@ func lookPath() (argv0 string, err error) {
 func setEnvs(l net.Listener) (fd uintptr, err error) {
 	v := reflect.ValueOf(l).Elem().FieldByName("fd").Elem()
 	fd = uintptr(v.FieldByName("sysfd").Int())
-log.Println("setEnvs fd:", fd)
-	r0, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, fd, syscall.F_SETFD, 0)
-	val := int(r0)
-	log.Println("val:", val, "e1: ", e1)
+	_, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, fd, syscall.F_SETFD, 0)
 	if 0 != e1 {
 		err = e1
 		return
@@ -258,15 +275,6 @@ log.Println("setEnvs fd:", fd)
 		"GOAGAIN_NAME",
 		fmt.Sprintf("%s:%s->", addr.Network(), addr.String()),
 	); nil != err {
-		return
-	}
-	var sig syscall.Signal
-	if InheritExec == Strategy {
-		sig = syscall.SIGUSR2
-	} else {
-		sig = syscall.SIGQUIT
-	}
-	if err = os.Setenv("GOAGAIN_SIGNAL", fmt.Sprintf("%d", sig)); nil != err {
 		return
 	}
 	return

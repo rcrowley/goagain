@@ -29,8 +29,6 @@ sleep 2
 [ ! -d "/proc/$PID" ]
 [ -z "$(findproc "inherit")" ]
 cd "$OLDPWD"
-EOF
-# exit
 
 cd "example/inherit-exec"
 go build

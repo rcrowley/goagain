@@ -59,6 +59,7 @@ func main() {
 
 }
 
+// A very rude server that says hello and then closes your connection.
 func serve(l net.Listener) {
 	for {
 		c, err := l.Accept()
