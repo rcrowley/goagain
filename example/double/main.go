@@ -76,12 +76,19 @@ func main() {
 func serve(l net.Listener, ch chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
+
+		// Break out of the accept loop on the next iteration after the
+		// process was signaled and our channel was closed.
 		select {
 		case <-ch:
 			return
 		default:
 		}
-		l.(*net.TCPListener).SetDeadline(time.Now().Add(100e6)) // XXX
+
+		// Set a deadline so Accept doesn't block forever, which gives
+		// us an opportunity to stop gracefully.
+		l.(*net.TCPListener).SetDeadline(time.Now().Add(100e6))
+
 		c, err := l.Accept()
 		if nil != err {
 			if goagain.IsErrClosing(err) {
