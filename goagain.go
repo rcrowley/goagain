@@ -16,14 +16,14 @@ import (
 type strategy int
 
 const (
-	// The Inherit strategy: parent forks child to run new code with inherited
-	// listener; child kills parent and becomes a child of init(8).
-	Inherit strategy = iota
+	// The Single-exec strategy: parent forks child to exec with an inherited
+	// net.Listener; child kills parent and becomes a child of init(8).
+	Single strategy = iota
 
-	// The InheritExec strategy: parent forks child to run new code with
-	// inherited listener; child signals parent to exec to run new code;
-	// parent kills child.
-	InheritExec
+	// The Double-exec strategy: parent forks child to exec (first) with an
+	// inherited net.Listener; child signals parent to exec (second); parent
+	// kills child.
+	Double
 )
 
 // Don't make the caller import syscall.
@@ -45,8 +45,8 @@ var (
 	// log files.
 	OnSIGUSR1 func(l net.Listener) error
 
-	// The strategy to use.
-	Strategy strategy = Inherit
+	// The strategy to use; Single by default.
+	Strategy strategy = Single
 )
 
 // Re-exec this same image without dropping the net.Listener.
@@ -97,7 +97,7 @@ func ForkExec(l net.Listener) error {
 		return err
 	}
 	var sig syscall.Signal
-	if InheritExec == Strategy {
+	if Double == Strategy {
 		sig = syscall.SIGUSR2
 	} else {
 		sig = syscall.SIGQUIT

@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	goagain.Strategy = goagain.InheritExec
+	goagain.Strategy = goagain.Double
 	log.SetFlags(log.Lmicroseconds | log.Lshortfile)
 	log.SetPrefix(fmt.Sprintf("pid:%d ", syscall.Getpid()))
 }
