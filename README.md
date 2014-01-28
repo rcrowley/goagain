@@ -16,6 +16,8 @@ Installation
 Usage
 -----
 
+Send `SIGUSR2` to a process using `goagain` and it will restart without downtime.
+
 [`example/single/main.go`](https://github.com/rcrowley/goagain/blob/master/example/single/main.go):  The `Single` strategy (named because it calls `execve`(2) once) operates similarly to Nginx and Unicorn.  The parent forks a child, the child execs, and then the child kills the parent.  This is easy to understand but doesn't play nicely with Upstart and similar direct-supervision `init`(8) daemons.  It should play nicely with `systemd`.
 
 [`example/double/main.go`](https://github.com/rcrowley/goagain/blob/master/example/double/main.go):  The `Double` strategy (named because it calls `execve`(2) twice) is **experimental** so proceed with caution.  The parent forks a child, the child execs, the child signals the parent, the parent execs, and finally the parent kills the child.  This is regrettably much more complicated but plays nicely with Upstart and similar direct-supervision `init`(8) daemons.
