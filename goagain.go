@@ -123,7 +123,7 @@ func ForkExec(l net.Listener) error {
 	if nil != err {
 		return err
 	}
-	log.Printf("spawned child %d\n", p.Pid)
+	log.Println("spawned child", p.Pid)
 	if err = os.Setenv("GOAGAIN_PID", fmt.Sprint(p.Pid)); nil != err {
 		return err
 	}
@@ -156,7 +156,7 @@ func Kill() error {
 	if _, err := fmt.Sscan(os.Getenv("GOAGAIN_SIGNAL"), &sig); nil != err {
 		sig = syscall.SIGQUIT
 	}
-	log.Printf("sending signal %d to process %d", sig, pid)
+	log.Println("sending signal", sig, "to process", pid)
 	return syscall.Kill(pid, sig)
 }
 

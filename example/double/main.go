@@ -30,7 +30,7 @@ func main() {
 		if nil != err {
 			log.Fatalln(err)
 		}
-		log.Printf("listening on %v", l.Addr())
+		log.Println("listening on", l.Addr())
 
 		// Accept connections in a new goroutine.
 		go serve(l, ch, wg)
@@ -38,7 +38,7 @@ func main() {
 	} else {
 
 		// Resume listening and accepting connections in a new goroutine.
-		log.Printf("resuming listening on %v", l.Addr())
+		log.Println("resuming listening on", l.Addr())
 		go serve(l, ch, wg)
 
 		// If this is the child, send the parent SIGUSR2.  If this is the
