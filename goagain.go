@@ -28,7 +28,7 @@ const (
 
 // Don't make the caller import syscall.
 const (
-	SIGINT = syscall.SIGINT
+	SIGINT  = syscall.SIGINT
 	SIGQUIT = syscall.SIGQUIT
 	SIGTERM = syscall.SIGTERM
 	SIGUSR2 = syscall.SIGUSR2
@@ -155,6 +155,9 @@ func Kill() error {
 	}
 	if _, err := fmt.Sscan(os.Getenv("GOAGAIN_SIGNAL"), &sig); nil != err {
 		sig = syscall.SIGQUIT
+	}
+	if syscall.SIGQUIT == sig && Double == Strategy {
+		go syscall.Wait4(pid, nil, 0, nil)
 	}
 	log.Println("sending signal", sig, "to process", pid)
 	return syscall.Kill(pid, sig)
