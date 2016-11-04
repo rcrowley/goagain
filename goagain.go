@@ -41,7 +41,7 @@ var (
 	OnSIGHUP func(l net.Listener) error
 
 	// OnSIGUSR1 is the function called when the server receives a
-	// SIGUSR1 signal. The normal use case for SIGUSR1 is to repon the
+	// SIGUSR1 signal. The normal use case for SIGUSR1 is to reopen the
 	// log files.
 	OnSIGUSR1 func(l net.Listener) error
 
