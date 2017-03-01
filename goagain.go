@@ -249,6 +249,7 @@ func Wait(l net.Listener) (syscall.Signal, error) {
 
 		}
 	}
+	return syscall.SIGQUIT, nil
 }
 
 func lookPath() (argv0 string, err error) {
