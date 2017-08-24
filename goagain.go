@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"reflect"
 	"syscall"
 )
 
@@ -263,13 +262,19 @@ func lookPath() (argv0 string, err error) {
 }
 
 func setEnvs(l net.Listener) (fd uintptr, err error) {
-	v := reflect.ValueOf(l).Elem().FieldByName("fd").Elem()
-	fd = uintptr(v.FieldByName("sysfd").Int())
-	_, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, fd, syscall.F_SETFD, 0)
-	if 0 != e1 {
-		err = e1
+	var f *os.File
+	switch t := l.(type) {
+	case *net.TCPListener:
+		f, err = t.File()
+	case *net.UnixListener:
+		f, err = t.File()
+	default:
+		return fd, fmt.Errorf("setEnvs: file descriptor is %T not *net.TCPListener or *net.UnixListener", l)
+	}
+	if err != nil {
 		return
 	}
+	fd = f.Fd()
 	if err = os.Setenv("GOAGAIN_FD", fmt.Sprint(fd)); nil != err {
 		return
 	}
