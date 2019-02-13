@@ -49,7 +49,7 @@ var (
 	Strategy strategy = Single
 )
 
-// Re-exec this same image without dropping the net.Listener.
+// Exec: Re-exec this same image without dropping the net.Listener.
 func Exec(l net.Listener) error {
 	var pid int
 	fmt.Sscan(os.Getenv("GOAGAIN_PID"), &pid)
@@ -73,7 +73,7 @@ func Exec(l net.Listener) error {
 	return syscall.Exec(argv0, os.Args, os.Environ())
 }
 
-// Fork and exec this same image without dropping the net.Listener.
+// ForkExec: Fork and exec this same image without dropping the net.Listener.
 func ForkExec(l net.Listener) error {
 	argv0, err := lookPath()
 	if nil != err {
@@ -130,7 +130,7 @@ func ForkExec(l net.Listener) error {
 	return nil
 }
 
-// Test whether an error is equivalent to net.errClosing as returned by
+// IsErrClosing tests whether an error is equivalent to net.errClosing as returned by
 // Accept during a graceful exit.
 func IsErrClosing(err error) bool {
 	if opErr, ok := err.(*net.OpError); ok {
@@ -163,7 +163,7 @@ func Kill() error {
 	return syscall.Kill(pid, sig)
 }
 
-// Reconstruct a net.Listener from a file descriptior and name specified in the
+// Listener: Reconstruct a net.Listener from a file descriptior and name specified in the
 // environment.  Deal with Go's insistence on dup(2)ing file descriptors.
 func Listener() (l net.Listener, err error) {
 	var fd uintptr
@@ -189,7 +189,7 @@ func Listener() (l net.Listener, err error) {
 	return
 }
 
-// Block this goroutine awaiting signals.  Signals are handled as they
+// Wait: Block this goroutine awaiting signals.  Signals are handled as they
 // are by Nginx and Unicorn: <http://unicorn.bogomips.org/SIGNALS.html>.
 func Wait(l net.Listener) (syscall.Signal, error) {
 	ch := make(chan os.Signal, 2)
